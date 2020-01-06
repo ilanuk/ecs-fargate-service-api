@@ -1,0 +1,44 @@
+image: atlassian/pipelines-awscli
+
+pipelines:
+  branches:
+    dev:
+      - step:
+          name: Build and push to ECR
+          script:
+            - export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_DEV
+            - export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_DEV
+            - eval $(aws ecr get-login --no-include-email --region eu-central-1)
+            - export FULLY_QUALIFIED_IMAGE_NAME=$ECR_REGISTRY_DEV/$IMAGE_NAME
+            - docker build --no-cache -t $IMAGE_NAME -t $IMAGE_NAME:latest -t $IMAGE_NAME:$BITBUCKET_COMMIT .
+            - docker tag $IMAGE_NAME:latest $FULLY_QUALIFIED_IMAGE_NAME:latest
+            - docker tag $IMAGE_NAME:$BITBUCKET_COMMIT $FULLY_QUALIFIED_IMAGE_NAME:$BITBUCKET_COMMIT
+            - docker push $FULLY_QUALIFIED_IMAGE_NAME:latest
+            - docker push $FULLY_QUALIFIED_IMAGE_NAME:$BITBUCKET_COMMIT
+          services:
+            - docker
+          caches:
+            - docker
+      - step:
+          name: Deploy to ECS
+          script:
+            - pipe: atlassian/aws-cloudformation-deploy:0.6.4
+              variables:
+                AWS_ACCESS_KEY_ID: "$AWS_ACCESS_KEY_ID_DEV"
+                AWS_SECRET_ACCESS_KEY: "$AWS_SECRET_ACCESS_KEY_DEV"
+                STACK_NAME: "my-service-api"
+                TEMPLATE: "cloudformation/api.yaml"
+                WAIT: "true"
+                STACK_PARAMETERS: >
+                  [{
+                    "ParameterKey": "ECRRegistry",
+                    "ParameterValue": "$ECR_REGISTRY_DEV"
+                  },
+                  {
+                    "ParameterKey": "ImageVersion",
+                    "ParameterValue": "$BITBUCKET_COMMIT"
+                  }]
+          services:
+            - docker
+          caches:
+            - docker

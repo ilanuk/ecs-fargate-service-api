@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates the Data AVM API service.
+
+Parameters:
+  Prefix:
+    Type: String
+    Default: "my-service"
+
+  ECRRegistry:
+    Type: String
+
+  ImageVersion:
+    Type: String
+
+Resources:
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "${Prefix}-api"
+      RetentionInDays: 14
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster:
+        Fn::ImportValue: !Sub "${Prefix}-ecs-cluster"
+      ServiceName: !Sub "${Prefix}-api"
+      LaunchType: FARGATE
+      HealthCheckGracePeriodSeconds: 60
+      # For CloudFormation not to get stuck during AWS::ECS::Service specify the task ARN
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            Fn::Split:
+              - ","
+              - Fn::ImportValue: !Sub "${Prefix}-private-subnets"
+          SecurityGroups:
+            - Fn::ImportValue: !Sub "${Prefix}-ecs-task-sg"
+      LoadBalancers:
+        - ContainerName: api
+          ContainerPort: 8000
+          TargetGroupArn:
+            Fn::ImportValue: !Sub "${Prefix}-lb-target-group-arn"
+
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      ExecutionRoleArn:
+        Fn::ImportValue: !Sub "${Prefix}-ecs-task-execution-role"
+      TaskRoleArn:
+        Fn::ImportValue: !Sub "${Prefix}-ecs-task-role"
+      Family: !Sub "${Prefix}-api"
+      Cpu: "256"
+      Memory: "512"
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: api
+          Image: !Sub "${ECRRegistry}/${Prefix}-api:${ImageVersion}"
+          PortMappings:
+            - ContainerPort: 8000
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: api
+        - Name: cloudwatch-agent
+          Image: "amazon/cloudwatch-agent:latest"
+          Cpu: 10
+          MemoryReservation: 256
+          Essential: false
+          PortMappings:
+            - ContainerPort: 8125
+              Protocol: "udp"
+          Environment:
+            - Name: "CW_CONFIG_CONTENT"
+              Value: !Sub |
+                {
+                  "agent": {
+                    "region": "${AWS::Region}",
+                    "metrics_collection_interval": 10
+                  },
+                  "metrics": {
+                    "namespace": "${Prefix}-api",
+                    "metrics_collected": {
+                      "statsd": {}
+                    }
+                  }
+                }
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-region: !Ref AWS::Region
+              awslogs-group: !Ref LogGroup
+              awslogs-stream-prefix: cloudwatch-agent
+
+Outputs:
+  LogGroup:
+    Description: A reference to the API Log Group Arn
+    Value: !GetAtt LogGroup.Arn
