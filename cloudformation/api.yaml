@@ -60,7 +60,7 @@ Resources:
         - FARGATE
       ContainerDefinitions:
         - Name: api
-          Image: !Sub "${ECRRegistry}/${Prefix}-api:${ImageVersion}"
+          Image: !Sub "${ECRRegistry}/${Prefix}:${ImageVersion}"
           PortMappings:
             - ContainerPort: 8000
           LogConfiguration:
