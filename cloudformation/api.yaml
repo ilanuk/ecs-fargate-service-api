@@ -16,7 +16,7 @@ Resources:
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "${Prefix}-api"
+      LogGroupName: !Sub "${Prefix}"
       RetentionInDays: 14
 
   Service:
@@ -24,7 +24,7 @@ Resources:
     Properties:
       Cluster:
         Fn::ImportValue: !Sub "${Prefix}-ecs-cluster"
-      ServiceName: !Sub "${Prefix}-api"
+      ServiceName: !Sub "${Prefix}"
       LaunchType: FARGATE
       HealthCheckGracePeriodSeconds: 60
       # For CloudFormation not to get stuck during AWS::ECS::Service specify the task ARN
@@ -52,7 +52,7 @@ Resources:
         Fn::ImportValue: !Sub "${Prefix}-ecs-task-execution-role"
       TaskRoleArn:
         Fn::ImportValue: !Sub "${Prefix}-ecs-task-role"
-      Family: !Sub "${Prefix}-api"
+      Family: !Sub "${Prefix}"
       Cpu: "256"
       Memory: "512"
       NetworkMode: awsvpc
@@ -86,7 +86,7 @@ Resources:
                     "metrics_collection_interval": 10
                   },
                   "metrics": {
-                    "namespace": "${Prefix}-api",
+                    "namespace": "${Prefix}",
                     "metrics_collected": {
                       "statsd": {}
                     }
